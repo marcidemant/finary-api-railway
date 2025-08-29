@@ -17,8 +17,19 @@ def health_check():
 
 @app.post("/auth/signin")
 def finary_signin():
-    """Authentification Finary"""
+    """Authentification Finary avec credentials env"""
     try:
+        email = os.environ.get("FINARY_EMAIL")
+        password = os.environ.get("FINARY_PASSWORD")
+        
+        if not email or not password:
+            return {"success": False, "error": "Variables FINARY_EMAIL/PASSWORD manquantes"}
+        
+        # Créer le fichier jwt.json temporaire
+        jwt_data = {"email": email, "password": password}
+        with open("/app/jwt.json", "w") as f:
+            json.dump(jwt_data, f)
+        
         result = subprocess.run(
             ["python3", "-m", "finary_uapi", "signin"], 
             cwd="/app",
@@ -29,13 +40,10 @@ def finary_signin():
         
         return {
             "success": result.returncode == 0,
-            "message": "Authentification réussie" if result.returncode == 0 else "Échec authentification",
-            "details": result.stdout if result.returncode == 0 else result.stderr
+            "message": "Auth réussie" if result.returncode == 0 else "Échec auth"
         }
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=408, detail="Timeout authentification")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 @app.get("/accounts")
 def get_accounts():
