@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import os
 import json
+import subprocess
 
 app = FastAPI(title="Finary API for n8n", version="1.0.0")
 
