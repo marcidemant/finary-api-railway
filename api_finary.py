@@ -14,24 +14,35 @@ def health_check():
 
 @app.post("/auth/signin")
 def finary_signin():
-    """Authentification directe avec finary_uapi"""
-    global finary_session
+    """Auth avec credentials directs"""
     try:
-        from finary_uapi.auth import FinaryAuth
-        
         email = os.environ.get("FINARY_EMAIL")
         password = os.environ.get("FINARY_PASSWORD")
         
         if not email or not password:
-            raise HTTPException(status_code=400, detail="Variables FINARY_EMAIL/PASSWORD manquantes")
+            return {"success": False, "error": "Credentials manquants"}
         
-        auth = FinaryAuth()
-        finary_session = auth.login(email, password)
+        # Créer fichier temporaire pour auth
+        jwt_data = {"email": email, "password": password}
+        with open("/tmp/jwt.json", "w") as f:
+            json.dump(jwt_data, f)
+            
+        # Pointer finary vers ce fichier
+        os.environ["FINARY_JWT_FILE"] = "/tmp/jwt.json"
         
-        return {"success": True, "message": "Authentification réussie"}
+        result = subprocess.run([
+            "python3", "-m", "finary_uapi", "me"
+        ], cwd="/app", capture_output=True, text=True, timeout=30)
+        
+        return {
+            "success": result.returncode == 0,
+            "returncode": result.returncode,
+            "stdout": result.stdout[:200],
+            "stderr": result.stderr[:200]
+        }
         
     except Exception as e:
-        return {"success": False, "error": f"Erreur auth: {str(e)}"}
+        return {"success": False, "error": str(e)}
 
 @app.get("/accounts")
 def get_accounts():
