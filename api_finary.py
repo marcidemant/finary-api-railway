@@ -1,13 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import os
+import requests
 import json
-import subprocess
 
 app = FastAPI(title="Finary API for n8n", version="1.0.0")
 
-# Session Finary globale
-finary_session = None
+# Session token global
+auth_token = None
+base_url = "https://api.finary.com"
 
 @app.get("/")
 def health_check():
@@ -15,7 +16,8 @@ def health_check():
 
 @app.post("/auth/signin")
 def finary_signin():
-    """Auth avec credentials directs"""
+    """Authentification directe API Finary"""
+    global auth_token
     try:
         email = os.environ.get("FINARY_EMAIL")
         password = os.environ.get("FINARY_PASSWORD")
@@ -23,42 +25,39 @@ def finary_signin():
         if not email or not password:
             return {"success": False, "error": "Credentials manquants"}
         
-        # Créer fichier temporaire pour auth
-        jwt_data = {"email": email, "password": password}
-        with open("/tmp/jwt.json", "w") as f:
-            json.dump(jwt_data, f)
+        # Auth directe API Finary
+        response = requests.post(f"{base_url}/v1/auth/signin", 
+            json={"email": email, "password": password},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            auth_token = data.get("access_token")
+            return {"success": True, "message": "Authentification réussie"}
+        else:
+            return {"success": False, "error": f"Auth failed: {response.status_code}"}
             
-        # Pointer finary vers ce fichier
-        os.environ["FINARY_JWT_FILE"] = "/tmp/jwt.json"
-        
-        result = subprocess.run([
-            "python3", "-m", "finary_uapi", "me"
-        ], cwd="/app", capture_output=True, text=True, timeout=30)
-        
-        return {
-            "success": result.returncode == 0,
-            "returncode": result.returncode,
-            "stdout": result.stdout[:200],
-            "stderr": result.stderr[:200]
-        }
-        
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.get("/accounts")
+@app.get("/accounts") 
 def get_accounts():
-    """Récupération des comptes"""
-    global finary_session
+    """Récupération comptes via API"""
+    global auth_token
     try:
-        if not finary_session:
-            raise HTTPException(status_code=401, detail="Non authentifié - appelez /auth/signin d'abord")
+        if not auth_token:
+            return {"success": False, "error": "Non authentifié"}
         
-        from finary_uapi.checking_accounts import CheckingAccounts
-        checking = CheckingAccounts(finary_session)
-        accounts = checking.get_accounts()
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        response = requests.get(f"{base_url}/v1/accounts", headers=headers, timeout=30)
         
-        return {"success": True, "count": len(accounts), "accounts": accounts}
-        
+        if response.status_code == 200:
+            accounts = response.json()
+            return {"success": True, "count": len(accounts), "accounts": accounts}
+        else:
+            return {"success": False, "error": f"API error: {response.status_code}"}
+            
     except Exception as e:
         return {"success": False, "error": str(e)}
 
