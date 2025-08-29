@@ -1,0 +1,10 @@
+[build]
+nixpacksConfigVersion = "0"
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+
+[env]
+PORT = 8000
